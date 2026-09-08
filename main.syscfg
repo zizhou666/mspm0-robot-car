@@ -1,0 +1,363 @@
+/*
+================================================================================
+MSPM0G3507 外设、引脚与中断 SysConfig 配置模块
+================================================================================
+【功能简介】
+本文件是工程引脚和硬件外设配置的唯一生成源，配置编码器 GPIO 中断、四路
+电机 PWM、控制定时器、OLED/Flash/按键/灰度 GPIO、蜂鸣器/RGB 指示灯以及
+ICM42688 软件 I2C 引脚。保存后由 TI SysConfig 生成 ti_msp_dl_config.c/h。
+
+================================================================================
+【函数定义】
+本文件不定义运行时 C 函数；它声明 GPIO、PWM、SYSCTL 和 TIMER 配置实例。
+生成结果提供 SYSCFG_DL_init、GPIO/SYSCTL/PWM/CONTROL_TIMER 初始化函数。
+
+================================================================================
+【使用说明】
+1. 修改引脚或外设实例只编辑本文件，再用同一 SDK/SysConfig 版本重新生成。
+2. 当前 ICM42688 使用 PA2=SCL、PB14=SDA 软件 I2C，不占用硬件 I2C 实例。
+3. 重新生成会覆盖 ti_msp_dl_config.c/h，其中人工说明需要按本模板重新补充。
+4. PWM 周期变化后同步修改 user_config.h 的 APP_MOTOR_PWM_PERIOD_COUNTS。
+================================================================================
+*/
+/**
+ * Integrated ICM42688 + dual encoder + speed PI + OLED project.
+ *
+ * Pin source:
+ * MSPM0G3507电赛小车资源分配表_42688独立软件I2C版.xlsx
+ *
+ * Key decisions from that workbook:
+ * - ICM42688 uses independent GPIO software-I2C on PB14 SDA and PA2 SCL.
+ * - NRF24L01 uses independent GPIO software-SPI on PA11 SCK, PA10 MOSI,
+ *   PA23 MISO, PA29 CSN, PA21 CE and PA30 IRQ.
+ * - Motor output uses a TB6612 dual-H-bridge: PWMA PA15/TIMA1_CCP0,
+ *   PWMB PA3/TIMA0_CCP1, AIN1 PA7, AIN2 PB1, BIN1 PB2 and BIN2 PB3.
+ * - W25Q64 uses PA12 SCLK, PA13 MISO, PA14 MOSI and PB25 CS.
+ * - Gray P1-P12 retain the complete workbook mapping, including PB23 as P8.
+ *   Motor-debug start/stop uses a short press of the five-way center key;
+ *   a long center press remains the persistent-save action.
+ * - PA27 drives the active-high buzzer. PB26/PB27/PB22 drive the active-high
+ *   RGB red/green/blue channels. All four outputs default to low/off.
+ * - OLED pins are not listed in the workbook. They retain source-B wiring:
+ *   PA17 SCL, PB15 SDA, PB16 RST, PB17 DC, PB20 CS.
+ */
+
+/**
+ * @cliArgs --device "MSPM0G350X" --part "Default" --package "LQFP-64(PM)" --product "mspm0_sdk@2.04.00.06"
+ * @v2CliArgs --device "MSPM0G3507" --package "LQFP-64(PM)" --product "mspm0_sdk@2.04.00.06"
+ * @versions {"tool":"1.25.0"}
+ */
+
+const GPIO    = scripting.addModule("/ti/driverlib/GPIO", {}, false);
+const GPIO1   = GPIO.addInstance();
+const GPIO2   = GPIO.addInstance();
+const GPIO3   = GPIO.addInstance();
+const GPIO4   = GPIO.addInstance();
+const GPIO5   = GPIO.addInstance();
+const GPIO6   = GPIO.addInstance();
+const GPIO7   = GPIO.addInstance();
+const GPIO8   = GPIO.addInstance();
+const GPIO9   = GPIO.addInstance();
+const GPIO10  = GPIO.addInstance();
+const GPIO11  = GPIO.addInstance();
+const GPIO12  = GPIO.addInstance();
+const GPIO13  = GPIO.addInstance();
+const Board   = scripting.addModule("/ti/driverlib/Board", {}, false);
+const ADC12   = scripting.addModule("/ti/driverlib/ADC12", {}, false);
+const ADC121  = ADC12.addInstance();
+const UART    = scripting.addModule("/ti/driverlib/UART", {}, false);
+const UART1   = UART.addInstance();
+const PWM     = scripting.addModule("/ti/driverlib/PWM", {}, false);
+const PWM1    = PWM.addInstance();
+const PWM2    = PWM.addInstance();
+const SYSCTL  = scripting.addModule("/ti/driverlib/SYSCTL");
+const TIMER   = scripting.addModule("/ti/driverlib/TIMER", {}, false);
+const TIMER1  = TIMER.addInstance();
+
+/* Encoder wiring follows the workbook:
+ * E1/A encoder = PB5 A phase and PB7 B phase.
+ * E2/B encoder = PB4 A phase and PB6 B phase.
+ * Both A and B channels interrupt on both edges for x4 quadrature decoding. */
+GPIO1.$name                               = "ENCODER";
+GPIO1.associatedPins.create(4);
+GPIO1.associatedPins[0].$name             = "LEFT_A";
+GPIO1.associatedPins[0].direction         = "INPUT";
+GPIO1.associatedPins[0].polarity          = "RISE_FALL";
+GPIO1.associatedPins[0].interruptEn       = true;
+GPIO1.associatedPins[0].interruptPriority = "0";
+GPIO1.associatedPins[0].pin.$assign       = "PB5";
+GPIO1.associatedPins[1].$name             = "LEFT_B";
+GPIO1.associatedPins[1].direction         = "INPUT";
+GPIO1.associatedPins[1].polarity          = "RISE_FALL";
+GPIO1.associatedPins[1].interruptEn       = true;
+GPIO1.associatedPins[1].interruptPriority = "0";
+GPIO1.associatedPins[1].pin.$assign       = "PB7";
+GPIO1.associatedPins[2].$name             = "RIGHT_A";
+GPIO1.associatedPins[2].direction         = "INPUT";
+GPIO1.associatedPins[2].polarity          = "RISE_FALL";
+GPIO1.associatedPins[2].interruptEn       = true;
+GPIO1.associatedPins[2].interruptPriority = "0";
+GPIO1.associatedPins[2].pin.$assign       = "PB4";
+GPIO1.associatedPins[3].$name             = "RIGHT_B";
+GPIO1.associatedPins[3].direction         = "INPUT";
+GPIO1.associatedPins[3].polarity          = "RISE_FALL";
+GPIO1.associatedPins[3].interruptEn       = true;
+GPIO1.associatedPins[3].interruptPriority = "0";
+GPIO1.associatedPins[3].pin.$assign       = "PB6";
+
+/* Five-way key: active low with internal pull-ups. */
+GPIO2.$name                              = "KEY5";
+GPIO2.associatedPins.create(5);
+GPIO2.associatedPins[0].$name            = "UP";
+GPIO2.associatedPins[0].direction        = "INPUT";
+GPIO2.associatedPins[0].internalResistor = "PULL_UP";
+GPIO2.associatedPins[0].pin.$assign      = "PB12";
+GPIO2.associatedPins[1].$name            = "DOWN";
+GPIO2.associatedPins[1].direction        = "INPUT";
+GPIO2.associatedPins[1].internalResistor = "PULL_UP";
+GPIO2.associatedPins[1].pin.$assign      = "PB8";
+GPIO2.associatedPins[2].$name            = "LEFT";
+GPIO2.associatedPins[2].direction        = "INPUT";
+GPIO2.associatedPins[2].internalResistor = "PULL_UP";
+GPIO2.associatedPins[2].pin.$assign      = "PB9";
+GPIO2.associatedPins[3].$name            = "RIGHT";
+GPIO2.associatedPins[3].direction        = "INPUT";
+GPIO2.associatedPins[3].internalResistor = "PULL_UP";
+GPIO2.associatedPins[3].pin.$assign      = "PB10";
+GPIO2.associatedPins[4].$name            = "CENTER";
+GPIO2.associatedPins[4].direction        = "INPUT";
+GPIO2.associatedPins[4].internalResistor = "PULL_UP";
+GPIO2.associatedPins[4].pin.$assign      = "PB11";
+
+/* OLED software-SPI, retained from source B because the workbook omits OLED. */
+GPIO3.$name                          = "OLED_PINS";
+GPIO3.associatedPins.create(5);
+GPIO3.associatedPins[0].$name        = "SCL";
+GPIO3.associatedPins[0].initialValue = "SET";
+GPIO3.associatedPins[0].pin.$assign  = "PA17";
+GPIO3.associatedPins[1].$name        = "SDA";
+GPIO3.associatedPins[1].initialValue = "SET";
+GPIO3.associatedPins[1].pin.$assign  = "PB15";
+GPIO3.associatedPins[2].$name        = "RST";
+GPIO3.associatedPins[2].initialValue = "SET";
+GPIO3.associatedPins[2].pin.$assign  = "PB16";
+GPIO3.associatedPins[3].$name        = "DC";
+GPIO3.associatedPins[3].initialValue = "CLEARED";
+GPIO3.associatedPins[3].pin.$assign  = "PB17";
+GPIO3.associatedPins[4].$name        = "OLED_CS";
+GPIO3.associatedPins[4].initialValue = "SET";
+GPIO3.associatedPins[4].pin.$assign  = "PB20";
+
+/* W25Q64 software-SPI from the final resource workbook. */
+GPIO4.$name                          = "FLASH_PINS";
+GPIO4.associatedPins.create(4);
+GPIO4.associatedPins[0].$name        = "SCLK";
+GPIO4.associatedPins[0].initialValue = "CLEARED";
+GPIO4.associatedPins[0].pin.$assign  = "PA12";
+GPIO4.associatedPins[1].$name        = "MISO";
+GPIO4.associatedPins[1].direction    = "INPUT";
+GPIO4.associatedPins[1].pin.$assign  = "PA13";
+GPIO4.associatedPins[2].$name        = "MOSI";
+GPIO4.associatedPins[2].initialValue = "CLEARED";
+GPIO4.associatedPins[2].pin.$assign  = "PA14";
+GPIO4.associatedPins[3].$name        = "CS";
+GPIO4.associatedPins[3].initialValue = "SET";
+GPIO4.associatedPins[3].pin.$assign  = "PB25";
+
+/* Independent 50-kHz software-I2C lines. The internal pull-ups provide a
+ * defined startup state; retain external pull-ups to 3.3 V. The generated
+ * GPIO setup also enables input hysteresis on both lines. */
+GPIO5.$name                                  = "ICM_SDA";
+GPIO5.associatedPins[0].$name                = "SW_SDA";
+GPIO5.associatedPins[0].direction            = "INPUT";
+GPIO5.associatedPins[0].internalResistor     = "PULL_UP";
+GPIO5.associatedPins[0].pin.$assign          = "PB14";
+
+GPIO6.$name                                  = "ICM_SCL";
+GPIO6.associatedPins[0].$name                = "SW_SCL";
+GPIO6.associatedPins[0].direction            = "INPUT";
+GPIO6.associatedPins[0].internalResistor     = "PULL_UP";
+GPIO6.associatedPins[0].pin.$assign          = "PA2";
+
+/* Independent page buttons, active low with internal pull-ups. */
+GPIO7.$name                              = "PAGE_PREV";
+GPIO7.associatedPins[0].$name            = "PREV";
+GPIO7.associatedPins[0].direction        = "INPUT";
+GPIO7.associatedPins[0].internalResistor = "PULL_UP";
+GPIO7.associatedPins[0].pin.$assign      = "PA18";
+
+GPIO8.$name                              = "PAGE_NEXT";
+GPIO8.associatedPins[0].$name            = "NEXT";
+GPIO8.associatedPins[0].direction        = "INPUT";
+GPIO8.associatedPins[0].internalResistor = "PULL_UP";
+GPIO8.associatedPins[0].pin.$assign      = "PB21";
+
+/* Complete gray P1-P12 input bank, left to right, active high on black. */
+GPIO9.$name = "LINE_SENSORS";
+GPIO9.associatedPins.create(12);
+GPIO9.associatedPins[0].$name         = "P1";
+GPIO9.associatedPins[0].direction     = "INPUT";
+GPIO9.associatedPins[0].pin.$assign   = "PA31";
+GPIO9.associatedPins[1].$name         = "P2";
+GPIO9.associatedPins[1].direction     = "INPUT";
+GPIO9.associatedPins[1].pin.$assign   = "PA28";
+GPIO9.associatedPins[2].$name         = "P3";
+GPIO9.associatedPins[2].direction     = "INPUT";
+GPIO9.associatedPins[2].pin.$assign   = "PA1";
+GPIO9.associatedPins[3].$name         = "P4";
+GPIO9.associatedPins[3].direction     = "INPUT";
+GPIO9.associatedPins[3].pin.$assign   = "PA0";
+GPIO9.associatedPins[4].$name         = "P5";
+GPIO9.associatedPins[4].direction     = "INPUT";
+GPIO9.associatedPins[4].pin.$assign   = "PA25";
+GPIO9.associatedPins[5].$name         = "P6";
+GPIO9.associatedPins[5].direction     = "INPUT";
+GPIO9.associatedPins[5].pin.$assign   = "PA24";
+GPIO9.associatedPins[6].$name         = "P7";
+GPIO9.associatedPins[6].direction     = "INPUT";
+GPIO9.associatedPins[6].pin.$assign   = "PB24";
+GPIO9.associatedPins[7].$name         = "P8";
+GPIO9.associatedPins[7].direction     = "INPUT";
+GPIO9.associatedPins[7].pin.$assign   = "PB23";
+GPIO9.associatedPins[8].$name         = "P9";
+GPIO9.associatedPins[8].direction     = "INPUT";
+GPIO9.associatedPins[8].pin.$assign   = "PB19";
+GPIO9.associatedPins[9].$name         = "P10";
+GPIO9.associatedPins[9].direction     = "INPUT";
+GPIO9.associatedPins[9].pin.$assign   = "PB18";
+GPIO9.associatedPins[10].$name        = "P11";
+GPIO9.associatedPins[10].direction    = "INPUT";
+GPIO9.associatedPins[10].pin.$assign  = "PA16";
+GPIO9.associatedPins[11].$name        = "P12";
+GPIO9.associatedPins[11].direction    = "INPUT";
+GPIO9.associatedPins[11].pin.$assign  = "PB13";
+
+/* Active-high RGB channels. Keep all colors off during power-up. */
+GPIO10.$name                          = "RGB_PINS";
+GPIO10.associatedPins.create(3);
+GPIO10.associatedPins[0].$name        = "RED";
+GPIO10.associatedPins[0].initialValue = "CLEARED";
+GPIO10.associatedPins[0].pin.$assign  = "PB26";
+GPIO10.associatedPins[1].$name        = "GREEN";
+GPIO10.associatedPins[1].initialValue = "CLEARED";
+GPIO10.associatedPins[1].pin.$assign  = "PB27";
+GPIO10.associatedPins[2].$name        = "BLUE";
+GPIO10.associatedPins[2].initialValue = "CLEARED";
+GPIO10.associatedPins[2].pin.$assign  = "PB22";
+
+/* Active-high buzzer output. Default low prevents an unwanted startup beep. */
+GPIO11.$name                          = "BUZZER_PIN";
+GPIO11.associatedPins[0].$name        = "BUZZER";
+GPIO11.associatedPins[0].initialValue = "CLEARED";
+GPIO11.associatedPins[0].pin.$assign  = "PA27";
+
+/* TB6612 direction inputs, active high. PWMA/PWMB are configured below. */
+GPIO12.$name                          = "TB6612_DIR";
+GPIO12.associatedPins.create(4);
+GPIO12.associatedPins[0].$name        = "AIN1";
+GPIO12.associatedPins[0].initialValue = "CLEARED";
+GPIO12.associatedPins[0].pin.$assign  = "PA7";
+GPIO12.associatedPins[1].$name        = "AIN2";
+GPIO12.associatedPins[1].initialValue = "CLEARED";
+GPIO12.associatedPins[1].pin.$assign  = "PB1";
+GPIO12.associatedPins[2].$name        = "BIN1";
+GPIO12.associatedPins[2].initialValue = "CLEARED";
+GPIO12.associatedPins[2].pin.$assign  = "PB2";
+GPIO12.associatedPins[3].$name        = "BIN2";
+GPIO12.associatedPins[3].initialValue = "CLEARED";
+GPIO12.associatedPins[3].pin.$assign  = "PB3";
+
+/* NRF24L01 software SPI and active-low interrupt, from the resource table. */
+GPIO13.$name                               = "NRF24_PINS";
+GPIO13.associatedPins.create(6);
+GPIO13.associatedPins[0].$name             = "RADIO_SCK";
+GPIO13.associatedPins[0].initialValue       = "CLEARED";
+GPIO13.associatedPins[0].pin.$assign        = "PA11";
+GPIO13.associatedPins[1].$name             = "RADIO_MOSI";
+GPIO13.associatedPins[1].initialValue       = "CLEARED";
+GPIO13.associatedPins[1].pin.$assign        = "PA10";
+GPIO13.associatedPins[2].$name             = "RADIO_MISO";
+GPIO13.associatedPins[2].direction          = "INPUT";
+GPIO13.associatedPins[2].pin.$assign        = "PA23";
+GPIO13.associatedPins[3].$name             = "RADIO_CSN";
+GPIO13.associatedPins[3].initialValue       = "SET";
+GPIO13.associatedPins[3].pin.$assign        = "PA29";
+GPIO13.associatedPins[4].$name             = "RADIO_CE";
+GPIO13.associatedPins[4].initialValue       = "CLEARED";
+GPIO13.associatedPins[4].pin.$assign        = "PA21";
+GPIO13.associatedPins[5].$name             = "RADIO_IRQ";
+GPIO13.associatedPins[5].direction          = "INPUT";
+GPIO13.associatedPins[5].internalResistor   = "PULL_UP";
+GPIO13.associatedPins[5].polarity           = "FALL";
+GPIO13.associatedPins[5].interruptEn        = true;
+GPIO13.associatedPins[5].interruptPriority  = "1";
+GPIO13.associatedPins[5].pin.$assign        = "PA30";
+
+/* VIN monitor: PA26 is ADC0 channel 1 through a 100k/10k divider. */
+ADC121.$name                  = "BATTERY_ADC";
+ADC121.sampClkSrc             = "DL_ADC12_CLOCK_ULPCLK";
+ADC121.sampClkDiv             = "DL_ADC12_CLOCK_DIVIDE_8";
+ADC121.adcMem0chansel         = "DL_ADC12_INPUT_CHAN_1";
+ADC121.sampleTime0            = "125 us";
+ADC121.powerDownMode          = "DL_ADC12_POWER_DOWN_MODE_MANUAL";
+ADC121.peripheral.$assign     = "ADC0";
+ADC121.peripheral.adcPin1.$assign = "PA26";
+
+/* Reserved MaixCam communication port: UART1, 115200 baud, 8-N-1. */
+UART1.$name                         = "UART_1";
+UART1.targetBaudRate                = 115200;
+UART1.uartClkSrc                    = "BUSCLK";
+UART1.ovsRate                       = "16";
+UART1.enableFIFO                    = true;
+UART1.rxFifoThreshold               = "DL_UART_RX_FIFO_LEVEL_ONE_ENTRY";
+UART1.enableDMARX                   = false;
+UART1.enableDMATX                   = false;
+UART1.enabledInterrupts             = ["RX"];
+UART1.peripheral.$assign            = "UART1";
+UART1.peripheral.txPin.$assign      = "PA8";
+UART1.peripheral.rxPin.$assign      = "PA9";
+UART1.txPinConfig.$name             = "ti_driverlib_gpio_GPIOPinGeneric3";
+UART1.rxPinConfig.$name             = "ti_driverlib_gpio_GPIOPinGeneric4";
+
+/* TB6612 PWMB on PA3/TIMA0_CCP1. */
+PWM1.$name                          = "PWM_0";
+PWM1.ccIndex                        = [1];
+PWM1.timerCount                     = 1000;
+PWM1.timerStartTimer                = false;
+PWM1.pwmMode                        = "EDGE_ALIGN_UP";
+PWM1.clockDivider                   = 8;
+PWM1.clockPrescale                  = 4;
+PWM1.PWM_CHANNEL_1.$name            = "ti_driverlib_pwm_PWMTimerCC1";
+PWM1.PWM_CHANNEL_1.shadowUpdateMode = "IMMEDIATE";
+PWM1.peripheral.$assign             = "TIMA0";
+PWM1.peripheral.ccp1Pin.$assign     = "PA3";
+PWM1.ccp1PinConfig.$name            = "ti_driverlib_gpio_GPIOPinGeneric1";
+
+/* TB6612 PWMA on PA15/TIMA1_CCP0. */
+PWM2.$name                          = "PWM_1";
+PWM2.ccIndex                        = [0];
+PWM2.timerCount                     = 1000;
+PWM2.timerStartTimer                = false;
+PWM2.pwmMode                        = "EDGE_ALIGN_UP";
+PWM2.clockDivider                   = 8;
+PWM2.clockPrescale                  = 4;
+PWM2.PWM_CHANNEL_0.$name            = "ti_driverlib_pwm_PWMTimerCC0";
+PWM2.PWM_CHANNEL_0.shadowUpdateMode = "IMMEDIATE";
+PWM2.peripheral.$assign             = "TIMA1";
+PWM2.peripheral.ccp0Pin.$assign     = "PA15";
+PWM2.ccp0PinConfig.$name            = "ti_driverlib_gpio_GPIOPinGeneric2";
+
+/* Fixed 10-ms speed-control trigger. ISR only increments a tick counter. */
+TIMER1.$name              = "CONTROL_TIMER";
+TIMER1.timerMode          = "PERIODIC_UP";
+TIMER1.timerPeriod        = "10 ms";
+TIMER1.timerClkPrescale   = 10;
+TIMER1.interrupts         = ["ZERO"];
+TIMER1.interruptPriority  = "1";
+TIMER1.peripheral.$assign = "TIMG0";
+
+SYSCTL.forceDefaultClkConfig = true;
+SYSCTL.clockTreeEn           = true;
+
+/* PA19/PA20 are no longer motor pins; keep SWD available. */
+Board.debugOn = true;

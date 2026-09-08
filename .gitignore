@@ -1,0 +1,24 @@
+# Local TI SDK (download separately; never commit licensed SDK contents)
+external/
+sdk/
+
+# Keil build output and per-user state
+keil/Objects/
+keil/Listings/
+keil/*.log
+keil/*.uvguix.*
+keil/*.uvoptx
+*.o
+*.obj
+*.axf
+*.elf
+*.hex
+*.map
+*.d
+
+# Local working data
+backups/
+tmp/
+*.zip
+.DS_Store
+Thumbs.db
